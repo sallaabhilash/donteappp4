@@ -15,6 +15,97 @@ This project demonstrates the design and implementation of a highly available, m
 
 ---
 
+## Implementation 2: VM-Based Disaster Recovery Using Azure Site Recovery
+
+This project also includes an alternate disaster recovery architecture using Azure Site Recovery (ASR) to protect and fail over virtual machine workloads.
+
+### Key components
+
+- **Primary Compute:** Azure Virtual Machines in the primary region running the same application stack.
+- **Secondary Recovery Region:** Azure Virtual Machines in a paired secondary region configured as the ASR recovery target.
+- **Replication Service:** Azure Site Recovery replicates VM disks continuously from the primary region to the secondary region.
+- **Networking:** Azure Virtual Network peering and recovery network configuration to ensure the recovered VMs can communicate with dependent services.
+- **Failover Control:** ASR Recovery Plans orchestrate shutdown, failover, and boot order for multi-VM applications.
+- **Traffic Failover:** Azure Traffic Manager or Azure Front Door redirects user traffic to the recovered VMs after ASR initiates failover.
+
+### VM-based DR workflow
+
+1. Provision the application on Azure VMs in the primary region.
+2. Enable Azure Site Recovery on the VM resource group and configure the secondary region as the recovery site.
+3. Configure replication policy settings for RPO, recovery point retention, and application-consistent snapshots.
+4. Create an ASR Recovery Plan that defines the failover order for web, app, and database tier VMs.
+5. Test the recovery plan with a planned/test failover to validate the secondary environment without impacting production.
+6. During an outage, trigger ASR failover to bring the secondary VMs online and update the traffic routing endpoint.
+7. After recovery, execute failback or reverse replication once the primary region is restored.
+
+### Benefits of VM-Based ASR DR
+
+- Provides enterprise-grade protection for legacy or stateful workloads that are not easily migrated to PaaS.
+- Supports application-consistent recovery points and orchestrated failover for multi-VM applications.
+- Simplifies disaster recovery operations by centralizing failover management in Azure Site Recovery.
+- Enables failback to the primary region once the outage is remediated.
+
+### Sample ASR setup
+
+A companion PowerShell script is included in `asr-site-recovery-setup.ps1` to provision the Recovery Services vault and enable Azure VM replication.
+
+```powershell
+.\asr-site-recovery-setup.ps1 \
+  -SubscriptionId "<your-subscription-id>" \
+  -PrimaryResourceGroup "dr-primary-rg" \
+  -RecoveryResourceGroup "dr-secondary-rg" \
+  -VaultName "dr-asr-vault" \
+  -VaultLocation "centralindia" \
+  -PrimaryVmName "dr-primary-vm" \
+  -PrimaryVmResourceGroup "dr-primary-rg" \
+  -RecoveryVmResourceGroup "dr-secondary-rg" \
+  -RecoveryFabricName "DRSecondaryFabric"
+```
+
+Customize the parameters to match your environment, then run the script from an Azure PowerShell session.
+
+#### Azure CLI alternative
+
+```bash
+az login
+az account set --subscription "<your-subscription-id>"
+
+az group create --name dr-primary-rg --location centralindia
+az group create --name dr-secondary-rg --location southindia
+
+az provider register --namespace Microsoft.RecoveryServices
+
+az recoveryservices vault create \
+  --resource-group dr-primary-rg \
+  --name dr-asr-vault \
+  --location centralindia
+
+az recoveryservices vault backup-properties set \
+  --resource-group dr-primary-rg \
+  --vault-name dr-asr-vault \
+  --storage-model GeoRedundant
+
+# Use Azure Portal or ASR PowerShell/CLI extension to enable replication for the VM.
+```
+
+A sample CLI script is also included in `asr-site-recovery-setup-cli.sh` for vault and resource group provisioning.
+
+### Implementation 2: VM-Based ASR Step-by-Step
+
+1. Provision your primary VM workloads in the primary region and install the application stack.
+2. Create a separate recovery resource group in the paired secondary region.
+3. Provision an Azure Recovery Services vault in the primary region and register the vault with the `Microsoft.RecoveryServices` provider.
+4. Enable ASR replication for the primary VMs, selecting the secondary region as the target.
+5. Configure a replication policy with the required RPO, application-consistent snapshot frequency, and retention settings.
+6. Create an ASR Recovery Plan to define boot order and orchestration for all protected VMs.
+7. Perform a test failover to validate the secondary environment and confirm network/DNS connectivity.
+8. During a disaster, trigger the failover and update Traffic Manager or Front Door to point to the recovered VM endpoints.
+9. After the primary region is restored, execute failback or reverse replication to resume normal operation.
+
+The goal is to validate the complete VM-based DR path and ensure the recovery environment is ready before an actual outage.
+
+---
+
 ## Step-by-Step Implementation
 
 ### 1. Application Development
